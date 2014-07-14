@@ -1,0 +1,38 @@
+GET _search
+{
+  "size": 10,
+  "_source": [
+    "name",
+    "awardValueNumeric"
+  ],
+  "query": {
+    "match_all": {}
+  },
+  "aggs": {
+    "setAsideTypeJoint": {
+      "nested": {
+        "path": "agencies"
+      },
+      "aggs": {
+        "nameBucket": {
+          "terms": {
+            "field": "agencies.name",
+            "size": 10
+          },
+          "aggs": {
+            "dollars": {
+              "reverse_nested": {},
+              "aggs": {
+                "awardDollars": {
+                  "stats": {
+                    "field": "awardValueNumeric"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

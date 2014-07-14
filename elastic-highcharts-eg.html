@@ -1,0 +1,56 @@
+<html>
+	<head>
+
+  	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+	<script src="http://code.highcharts.com/highcharts.js"></script>
+	<script type="text/javascript" src="/js/themes/gray.js"></script>
+
+	<script>
+
+//Define your client
+var client = new elasticsearch.Client({
+host: 'myelasticsearchserver.com:9200'
+});
+client.search({
+index: 'index',
+type: 'Logs',
+body: {
+"query": {
+"range": {
+"logDateTime": {
+"from": "01/04/2013 00:00:00",
+"to": "30/04/2013 23:59:00",
+"include_lower": true,
+"include_upper": true
+}
+}
+},
+"facets": {
+"created_ts": {
+"date_histogram": {
+"field": "logDateTime",
+"interval": "day"
+}
+},
+"tc": {
+"terms": {
+"field": "Dept",
+"size" : 2000
+}
+}
+}
+}
+
+</script>
+
+	</head>
+	
+	<body>
+
+	<div id="container" style="width:100%; height:400px;"></div>
+
+
+	</body>
+
+
+</html>
