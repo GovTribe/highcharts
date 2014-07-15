@@ -94,47 +94,65 @@
           "_source": [
           "name"
           ],
-          "query": {
-              "match_all": {}
+  "query": {
+    "filtered": {
+      "filter": {
+        "and": [
+          {
+            "term": {
+              "goodsOrServices": "Services"
+            }
           },
-          "aggs": {
-              "agencyNames": {
-                  "nested": {
-                      "path": "agencies"
-                  },
-                  "aggs": {
-                      "agencyName": {
-                          "terms": {
-                              "field": "agencies.name",
-                              "size": 10
-                          },
-                          "aggs": {
-                              "agencies_to_projects_setAside": {
-                                  "reverse_nested": {},
-                                  "aggs": {
-                                      "setAsideType": {
-                                          "terms": {
-                                              "field": "setAsideType",
-                                              "size": 15
-                                          }
-                                      }
-                                  }
-                              },
-                              "agencies_to_projects_awardValue": {
-                                  "reverse_nested": {},
-                                  "aggs": {
-                                      "awardValueStats": {
-                                          "stats": {
-                                              "field": "awardValueNumeric"
-                                          }
-                                      }
-                                  }
-                              }
-                          }
-                      }
-                  }
+          {
+            "nested": {
+              "path": "agencies",
+              "filter": {
+                "term": {
+                  "agencies.name": "Agency for International Development"
+                }
               }
+            }
           }
+        ]
+      }
+    }
+  },
+  "aggregations": {
+    "agencyNames": {
+      "nested": {
+        "path": "agencies"
+      },
+      "aggregations": {
+        "agencyName": {
+          "terms": {
+            "field": "agencies.name",
+            "size": 10
+          },
+          "aggregations": {
+            "agencies_to_projects_awardValue": {
+              "reverse_nested": {},
+              "aggregations": {
+                "awardValueHistogram": {
+                  "date_histogram": {
+                    "field": "importantDates.Award.date",
+                    "interval": "month",
+                    "min_doc_count": 0
+                  },
+                  "aggregations": {
+                    "bucket_stats": {
+                      "sum": {
+                        "field": "awardValueNumeric"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
       };
 
       $.ajax({
@@ -142,7 +160,12 @@
           url: 'esproxy.php',
           data: query,
           success: function(data) {    
-            console.log(data);
+
+            var results = data.hits;
+
+            console.log(results);
+
+
           },
           error: function(xhr, status, error) {
             alert(error);
