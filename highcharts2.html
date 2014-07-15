@@ -94,54 +94,58 @@
           "_source": [
           "name"
           ],
-  "query": {
-    "filtered": {
-      "filter": {
-        "and": [
-          {
-            "term": {
-              "goodsOrServices": "Services"
-            }
-          },
-          {
-            "nested": {
-              "path": "agencies",
+          "query": {
+            "filtered": {
               "filter": {
-                "term": {
-                  "agencies.name": "Agency for International Development"
-                }
+                "and": [
+                  {
+                    "term": {
+                      "goodsOrServices": "Services"
+                    }
+                  },
+                  {
+                    "nested": {
+                      "path": "agencies",
+                      "filter": {
+                        "term": {
+                          "agencies.name": "Agency for International Development"
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             }
-          }
-        ]
-      }
-    }
-  },
-  "aggregations": {
-    "agencyNames": {
-      "nested": {
-        "path": "agencies"
-      },
-      "aggregations": {
-        "agencyName": {
-          "terms": {
-            "field": "agencies.name",
-            "size": 10
           },
           "aggregations": {
-            "agencies_to_projects_awardValue": {
-              "reverse_nested": {},
+            "agencyNames": {
+              "nested": {
+                "path": "agencies"
+              },
               "aggregations": {
-                "awardValueHistogram": {
-                  "date_histogram": {
-                    "field": "importantDates.Award.date",
-                    "interval": "month",
-                    "min_doc_count": 0
+                "agencyName": {
+                  "terms": {
+                    "field": "agencies.name",
+                    "size": 10
                   },
                   "aggregations": {
-                    "bucket_stats": {
-                      "sum": {
-                        "field": "awardValueNumeric"
+                    "agencies_to_projects_awardValue": {
+                      "reverse_nested": {},
+                      "aggregations": {
+                        "awardValueHistogram": {
+                          "date_histogram": {
+                            "field": "importantDates.Award.date",
+                            "interval": "month",
+                            "min_doc_count": 0
+                          },
+                          "aggregations": {
+                            "bucket_stats": {
+                              "sum": {
+                                "field": "awardValueNumeric"
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -149,21 +153,15 @@
               }
             }
           }
-        }
-      }
-    }
-  }
       };
 
       $.ajax({
           type: 'post',
-          url: 'esproxy.php',
-          data: query,
+          url: '/esproxy.php',
+          data: JSON.stringify(query),
           success: function(data) {    
 
-            var results = data.hits;
-
-            console.log(results);
+            console.log(data);
 
 
           },
