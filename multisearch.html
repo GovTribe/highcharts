@@ -7,11 +7,11 @@
 
     <script>
 
-    var nameOfAgency = 'Department of Agriculture';
+    var nameOfAgency = 'Department of the Army';
 
     $(document).ready(function() {
 
-      var histogramQuery = {
+      var histogramQuery = [{
           "size": 1,
           "_source": [
           "name"
@@ -79,7 +79,69 @@
               }
             }
           }
-      };
+      },
+      {
+        "size": 0,
+        "_source": [
+          "name",
+          "vendors"
+        ],
+        "query": {
+          "filtered": {
+            "filter": {
+              "and": {
+                "filters": [
+                  {
+                    "nested": {
+                      "path": "agencies",
+                      "filter": {
+                        "term": {
+                          "agencies.name": "Agency for International Development"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "range": {
+                      "timestamp": {
+                        "from": "2012-10-01",
+                        "to": "2013-10-01"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "aggs": {
+          "vendorName": {
+            "nested": {
+              "path": "vendors"
+            },
+            "aggs": {
+              "vendorName": {
+                "terms": {
+                  "field": "vendors.name",
+                  "size": 0
+                },
+                "aggs": {
+                  "dollars": {
+                    "reverse_nested": {},
+                    "aggs": {
+                      "statsAgg": {
+                        "extended_stats": {
+                          "field": "awardValueNumeric"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+    }];
 
 
     // var makeHistogramChart = function(firstFoo, chartStyle, range) {
@@ -95,7 +157,10 @@
           data: JSON.stringify(histogramQuery),
           success: function(data) {    
 
-            var histogramData = data.aggregations.agencyNames.agencyName.buckets[0].agencies_to_projects_awardValue.awardValueHistogram.buckets;
+
+            console.log(data);
+
+            //var histogramData = data.aggregations.agencyNames.agencyName.buckets[0].agencies_to_projects_awardValue.awardValueHistogram.buckets;
 
             // console.log(histogramData);
 
@@ -173,9 +238,87 @@
                 }]
             });
           },
-          error: function(xhr, status, error) {
-            alert(error);
-          }
+
+          // success: function(data2) {
+
+          //   var vendorData = data;
+
+          //   console.log(vendorData);
+
+          //   var xAxisLabels = [];
+          //   var awardCount = [];
+          //   var awardValTotal = [];
+
+          //   for (var i = 0; i < histogramData.length; i++) {
+          //       var bucket = histogramData[i];
+
+          //       xAxisLabels[i] = bucket.key_as_string;
+          //       awardCount[i] = bucket.doc_count;
+          //       awardValTotal[i] = bucket.bucket_stats.value;
+          //       // console.log(bucket.key_as_string);
+          //   }
+
+          //       console.log(xAxisLabels);
+          //       console.log(awardCount);
+          //       console.log(awardValTotal);
+
+
+          //   var histoChart = new Highcharts.Chart({
+          //       chart: {
+          //           renderTo: 'container1',
+          //           zoomType: 'xy'
+          //       },
+          //       title: {
+          //           text: 'USAID Awards Histogram'
+          //       },
+          //       xAxis: {
+          //           categories: xAxisLabels
+          //       },
+
+          //       yAxis: [{ // Primary yAxis
+          //           labels: {
+          //               format: '${value}'
+          //           },
+          //           title: {
+          //               text: 'Dollars Awarded'
+          //           }
+          //       }, { // Secondary yAxis
+          //           title: {
+          //             text: 'Number of Awards'
+          //           },
+          //           opposite: true
+          //       }],
+          //       tooltip: {
+          //           shared: true
+          //       },
+          //       legend: {
+          //           layout: 'vertical',
+          //           align: 'right',
+          //           x: -100,
+          //           verticalAlign: 'top',
+          //           y: 100,
+          //           floating: true,
+          //           backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF'
+          //       },
+          //       series: [{
+          //           name: 'Dollars Awarded',
+          //           type: 'area',
+          //           yAxis: 0,
+          //           data: awardValTotal,
+          //       }, {
+          //           name: 'Number of Awards',
+          //           type: 'spline',
+          //           yAxis: 1,
+          //           data: awardCount
+          //       }]
+          //   });
+          // },
+
+
+
+          // error: function(xhr, status, error) {
+          //   alert(error);
+          // }
       });
 
     });

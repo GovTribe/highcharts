@@ -1,0 +1,204 @@
+<html>
+    <head>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+
+    <script>
+
+    $(document).ready(function() {
+
+    	var nameOfAgency = 'Department of Commerce';
+
+    	var sparkLineQuery = {
+	        "size": 0,
+	        "_source": [
+	          "name"
+	        ],
+	        "query": {
+	          "filtered": {
+	            "filter": {
+	              "nested": {
+	                "path": "agencies",
+	                "filter": {
+	                  "term": {
+	                    "agencies.name": nameOfAgency
+	                  }
+	                }
+	              }
+	            }
+	          }
+	        },
+	        "aggregations": {
+	          "solicitationFilter": {
+	            "filter": {
+	              "range": {
+	                "importantDates.Solicitation Posting.date": {
+	                  "gte" : "now-6M/M",
+	                  "lte": "now-1M/M"
+	                }
+	              }
+	            },
+	            "aggregations": {
+	              "solicitationHistogram": {
+	                "date_histogram": {
+	                  "field": "importantDates.Solicitation Posting.date",
+	                  "interval": "month",
+	                  "format" : "yyyy-MM",
+	                  "min_doc_count": 0
+	                }
+	              }
+	            }
+	          },
+	          "awardsFilter": {
+	            "filter": {
+	              "range": {
+	                "importantDates.Award.date": {
+	                  "gte" : "now-6M/M",
+	                  "lte": "now-1M/M"
+	                }
+	              }
+	            },
+	            "aggregations": {
+	              "awardsHistogram": {
+	                "date_histogram": {
+	                  "field": "importantDates.Award.date",
+	                  "interval": "month",
+	                  "format" : "yyyy-MM",
+	                  "min_doc_count": 0
+	                },
+	                "aggregations": {
+	                  "awardValueSum": {
+	                    "sum": {
+	                      "field": "awardValueNumeric"
+	                    }
+	                  }
+	                }          
+	              }
+	            }
+	          }
+	        }
+	      };
+
+	      function makeAjaxChart(dataToSend, parserFunctionName, chartingFunctionName, containerNo) {
+
+	        $.ajax({
+
+	          type: 'post',
+	          url: '/esproxy.php',
+	          data: JSON.stringify(dataToSend),
+	          success: function(data) {
+
+	           // console.log(data);
+
+	            var chartData = parserFunctionName(data);
+	            chartingFunctionName(chartData, containerNo);
+
+
+
+	          },
+	          error: function(xhr, status, error) {
+	            alert(error);
+	          }
+
+	        });
+
+	      };
+
+
+	      function parseSparkLineQuery(data) {
+
+	        var sparkLineSolicitationData = data.aggregations.solicitationFilter.solicitationHistogram.buckets;
+	        var sparkLineAwardData = data.aggregations.awardsFilter.awardsHistogram.buckets;
+
+	        var xAxisLabels = [];
+	        var solicitationCount = [];
+	        var awardCount = [];
+	        var awardValTotal = [];
+
+	        for (var i = 0; i < sparkLineSolicitationData.length; i++) {
+	          var bucket = sparkLineSolicitationData[i];
+
+	          xAxisLabels[i] = bucket.key_as_string;
+	          solicitationCount[i] = bucket.doc_count;
+	          awardCount[i] = sparkLineAwardData[i].doc_count;
+	          awardValTotal[i] = sparkLineAwardData[i].awardValueSum.value;          
+
+	        }
+
+	        var histoChart = [xAxisLabels, solicitationCount, awardCount, awardValTotal];
+
+	        return histoChart;
+
+	      };
+
+	      function chartSparkLine(data, containerNo) {
+
+	        console.log(data);
+
+	        new Highcharts.Chart({
+	          chart: {
+	              renderTo: 'container' + containerNo,
+	              type: 'area'
+	          },
+	          credits: {
+			    enabled: false
+			  },
+	          title: {
+	              text: '',
+	              style: {
+	                  display: 'none'
+	              }
+	          },           
+	          xAxis: {
+	              labels : {
+	                enabled: false
+	              },
+	              categories: data[0]
+	          },
+
+	          yAxis: { 
+	              gridLineWidth: 0,
+	              labels: {
+	                enabled: false
+	              },
+	              title: {
+	                text: '',
+	                style: {
+	                  display: 'none'
+	                }
+	              },
+	              min: 0
+	          },
+	          tooltip: {
+	              pointFormat: '{point.y} Bids Posted'
+	          },
+	          series: [{
+	              showInLegend: false,
+	              data: data[1],
+	              marker : {
+	                enabled : false
+	              }
+	          }]
+	        });
+
+	      };
+
+
+	      makeAjaxChart(sparkLineQuery, parseSparkLineQuery, chartSparkLine, 1);
+
+
+    	});
+
+    </script>
+
+    </head>
+    
+    <body>
+
+    <div id="container1" style="width:200px; height:100px;"></div>
+
+    </body>
+
+
+</html>

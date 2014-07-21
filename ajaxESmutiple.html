@@ -1,0 +1,492 @@
+<html>
+    <head>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+
+    <script>
+
+    var nameOfAgency = 'Department of Commerce';
+    var timeSpanForSubtitle = 'Fiscal Year 2013';
+    var startDate = "2012-09-30";
+    var endDate = "2013-10-01";
+
+    $(document).ready(function() {
+
+      var histogramQuery = {
+          "size": 1,
+          "_source": [
+          "name"
+          ],
+          "query": {
+            "filtered": {
+              "filter": {
+                "and": [
+                  {
+                    "range": {
+                      "timestamp": {
+                        "from": startDate,
+                        "to": endDate
+                      }
+                    }
+                  },
+                  {
+                    "nested": {
+                      "path": "agencies",
+                      "filter": {
+                        "term": {
+                          "agencies.name": nameOfAgency
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "aggregations": {
+            "agencyNames": {
+              "nested": {
+                "path": "agencies"
+              },
+              "aggregations": {
+                "agencyName": {
+                  "terms": {
+                    "field": "agencies.name",
+                    "size": 10
+                  },
+                  "aggregations": {
+                    "agencies_to_projects_awardValue": {
+                      "reverse_nested": {},
+                      "aggregations": {
+                        "awardValueHistogram": {
+                          "date_histogram": {
+                            "field": "importantDates.Award.date",
+                            "interval": "month",
+                            "format" : "yyyy-MM",
+                            "min_doc_count": 0
+                          },
+                          "aggregations": {
+                            "bucket_stats": {
+                              "sum": {
+                                "field": "awardValueNumeric"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        };
+
+      var vendorQuery = {
+        "size": 0,
+        "_source": [
+          "name",
+          "vendors"
+        ],
+        "query": {
+          "filtered": {
+            "filter": {
+              "and": {
+                "filters": [
+                  {
+                    "nested": {
+                      "path": "agencies",
+                      "filter": {
+                        "term": {
+                          "agencies.name": "Agency for International Development"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "range": {
+                      "timestamp": {
+                        "from": startDate,
+                        "to": endDate
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "aggs": {
+          "vendorName": {
+            "nested": {
+              "path": "vendors"
+            },
+            "aggs": {
+              "vendorName": {
+                "terms": {
+                  "field": "vendors.name",
+                  "size": 10,
+                  "order" : {"dollars>statsAgg.sum": "desc"}
+                },
+                "aggs": {
+                  "dollars": {
+                    "reverse_nested": {},
+                    "aggs": {
+                      "statsAgg": {
+                        "extended_stats": {
+                          "field": "awardValueNumeric"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+
+      var sparkLineQuery = {
+        "size": 0,
+        "_source": [
+          "name"
+        ],
+        "query": {
+          "filtered": {
+            "filter": {
+              "nested": {
+                "path": "agencies",
+                "filter": {
+                  "term": {
+                    "agencies.name": "Department of Commerce"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "aggregations": {
+          "solicitationFilter": {
+            "filter": {
+              "range": {
+                "importantDates.Solicitation Posting.date": {
+                  "gte" : "now-6M/M",
+                  "lte": "now-1M/M"
+                }
+              }
+            },
+            "aggregations": {
+              "solicitationHistogram": {
+                "date_histogram": {
+                  "field": "importantDates.Solicitation Posting.date",
+                  "interval": "month",
+                  "format" : "yyyy-MM",
+                  "min_doc_count": 0
+                }
+              }
+            }
+          },
+          "awardsFilter": {
+            "filter": {
+              "range": {
+                "importantDates.Award.date": {
+                  "gte" : "now-6M/M",
+                  "lte": "now-1M/M"
+                }
+              }
+            },
+            "aggregations": {
+              "awardsHistogram": {
+                "date_histogram": {
+                  "field": "importantDates.Award.date",
+                  "interval": "month",
+                  "format" : "yyyy-MM",
+                  "min_doc_count": 0
+                },
+                "aggregations": {
+                  "awardValueSum": {
+                    "sum": {
+                      "field": "awardValueNumeric"
+                    }
+                  }
+                }          
+              }
+            }
+          }
+        }
+      };
+
+      function makeAjaxChart(dataToSend, parserFunctionName, chartingFunctionName, containerNo) {
+
+        $.ajax({
+
+          type: 'post',
+          url: '/esproxy.php',
+          data: JSON.stringify(dataToSend),
+          success: function(data) {
+
+           // console.log(data);
+
+            var chartData = parserFunctionName(data);
+            chartingFunctionName(chartData, containerNo);
+
+
+
+          },
+          error: function(xhr, status, error) {
+            alert(error);
+          }
+
+        });
+
+      };
+
+      function parseHistogramQuery(data) {
+
+        var histogramData = data.aggregations.agencyNames.agencyName.buckets[0].agencies_to_projects_awardValue.awardValueHistogram.buckets;
+
+        var xAxisLabels = [];
+        var awardCount = [];
+        var awardValTotal = [];
+
+        for (var i = 0; i < histogramData.length; i++) {
+          var bucket = histogramData[i];
+
+          xAxisLabels[i] = bucket.key_as_string;
+          awardCount[i] = bucket.doc_count;
+          awardValTotal[i] = bucket.bucket_stats.value;
+        }
+
+        var histoChart = [xAxisLabels, awardCount, awardValTotal];
+
+        return histoChart;
+
+      };
+
+      function chartHistogram(data, containerNo) {
+
+        new Highcharts.Chart({
+          chart: {
+              renderTo: 'container' + containerNo,
+              zoomType: 'xy'
+          },
+          title: {
+              text: nameOfAgency + ' Awards Histogram'
+          },
+          subtitle: {
+              text: timeSpanForSubtitle
+          },                
+          xAxis: {
+              categories: data[0]
+          },
+
+          yAxis: [{ // Primary yAxis
+              labels: {
+                  formatter:function() {
+                      return '$' + Highcharts.numberFormat(this.value, 0, '', ',');
+                }
+              },
+              title: {
+                  text: 'Dollars Awarded'
+              }
+          }, { // Secondary yAxis
+              title: {
+                text: 'Number of Awards'
+              },
+              min: 0,
+              opposite: true
+          }],
+          tooltip: {
+              shared: true
+          },
+          legend: {
+              layout: 'vertical',
+              align: 'right',
+              x: -100,
+              verticalAlign: 'top',
+              y: 50,
+              floating: true,
+              backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF'
+          },
+          series: [{
+              name: 'Dollars Awarded',
+              type: 'area',
+              yAxis: 0,
+              data: data[2],
+          }, {
+              name: 'Number of Awards',
+              type: 'spline',
+              yAxis: 1,
+              data: data[1]
+          }]
+        });
+      };
+
+      
+      function parseVendorQuery(data) {
+
+        var xAxisLabels = [];
+        var awardValTotal = [];
+
+        var nameArray = data.aggregations.vendorName.vendorName.buckets;
+
+        for (var i = 0; i < nameArray.length; i++) {
+          var bucket = nameArray[i];
+          xAxisLabels[i] = bucket.key;
+          awardValTotal[i] = bucket.dollars.statsAgg.sum;
+        }
+
+        var vendorsChart = [xAxisLabels, awardValTotal];
+        return vendorsChart;
+
+      };
+
+      function chartVendors(data, containerNo) {
+        new Highcharts.Chart({
+          chart: {
+              renderTo: 'container' + containerNo,
+              type: 'column'
+          },
+          title: {
+              text: nameOfAgency + ' Top Vendors'
+          },
+          subtitle: {
+              text: timeSpanForSubtitle
+          },
+          xAxis: {
+              categories: data[0]
+          },
+          yAxis: {
+              labels: {
+                  formatter:function() {
+                      return '$' + Highcharts.numberFormat(this.value, 0, '', ',');
+                }
+              },            
+              min: 0,
+              title: {
+                  text: 'Total Dollars Awarded'
+              }
+          },
+          tooltip: {
+              headerFormat: '<span style="font-size:10px">{point.key}</span><table>',
+              pointFormat: '<tr><td style="color:{series.color};padding:0"></td>' +
+                  '<td style="padding:0"><b>{point.y:.1f}</b></td></tr>',
+              footerFormat: '</table>',
+              shared: true,
+              useHTML: true
+          },
+          plotOptions: {
+              column: {
+                  pointPadding: 0.2,
+                  borderWidth: 0
+              }
+          },
+          series: [{
+              showInLegend: false,
+              data: data[1]
+          }]
+        });
+      };
+
+
+      function parseSparkLineQuery(data) {
+
+        var sparkLineSolicitationData = data.aggregations.solicitationFilter.solicitationHistogram.buckets;
+        var sparkLineAwardData = data.aggregations.awardsFilter.awardsHistogram.buckets;
+
+        var xAxisLabels = [];
+        var solicitationCount = [];
+        var awardCount = [];
+        var awardValTotal = [];
+
+        for (var i = 0; i < sparkLineSolicitationData.length; i++) {
+          var bucket = sparkLineSolicitationData[i];
+
+          xAxisLabels[i] = bucket.key_as_string;
+          solicitationCount[i] = bucket.doc_count;
+          awardCount[i] = sparkLineAwardData[i].doc_count;
+          awardValTotal[i] = sparkLineAwardData[i].awardValueSum.value;          
+
+        }
+
+        var histoChart = [xAxisLabels, solicitationCount, awardCount, awardValTotal];
+
+        return histoChart;
+
+      };
+
+      function chartSparkLine(data, containerNo) {
+
+        console.log(data);
+
+        new Highcharts.Chart({
+          chart: {
+              renderTo: 'container' + containerNo,
+              type: 'area'
+          },
+          title: {
+              text: '',
+              style: {
+                  display: 'none'
+              }
+          },           
+          xAxis: {
+              labels : {
+                enabled: false
+              },
+              categories: data[0]
+          },
+
+          yAxis: { 
+              gridLineWidth: 0,
+              labels: {
+                enabled: false
+              },
+              title: {
+                text: '',
+                style: {
+                  display: 'none'
+                }
+              },
+              min: 0
+          },
+          tooltip: {
+              pointFormat: '{point.y} Bids Posted'
+          },
+          series: [{
+              showInLegend: false,
+              data: data[1],
+              marker : {
+                enabled : false
+              }
+          }]
+        });
+
+      };
+
+      makeAjaxChart(histogramQuery, parseHistogramQuery, chartHistogram, 1);
+
+      makeAjaxChart(vendorQuery, parseVendorQuery, chartVendors, 2);
+
+      makeAjaxChart(sparkLineQuery, parseSparkLineQuery, chartSparkLine, 3);
+
+
+    });
+
+    </script>
+
+    </head>
+    
+    <body>
+
+    <div id="container1" style="width:90%; height:400px;"></div>
+    <br>
+    <div id="container2" style="width:90%; height:400px;"></div>
+    <br>
+    <div id="container3" style="width:90%; height:400px;"></div>
+
+    </body>
+
+
+</html>

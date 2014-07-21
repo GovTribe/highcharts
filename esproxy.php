@@ -2,8 +2,8 @@
     $ch = curl_init();
     $method = "POST";
     $url = "search.govtribe.com/project/_search";
-    $username = '';
-    $password = '';
+    $username = 'superuser';
+    $password = 'Str33g4ng';
      
     $query = file_get_contents('php://input');
      

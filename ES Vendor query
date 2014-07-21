@@ -1,0 +1,64 @@
+GET _search
+{
+  "size": 0,
+  "_source": [
+    "name",
+    "vendors"
+  ],
+  "query": {
+    "filtered": {
+      "filter": {
+        "and": {
+          "filters": [
+            {
+              "nested": {
+                "path": "agencies",
+                "filter": {
+                  "term": {
+                    "agencies.name": "Agency for International Development"
+                  }
+                }
+              }
+            },
+            {
+              "range": {
+                "timestamp": {
+                  "from": "2012-10-01",
+                  "to": "2013-10-01"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "aggs": {
+    "vendorName": {
+      "nested": {
+        "path": "vendors"
+      },
+      "aggs": {
+        "vendorName": {
+          "terms": {
+            "field": "vendors.name",
+            "size": 0,
+            "order" : {"dollars>statsAgg.sum": "desc"}
+          },
+          "aggs": {
+            "dollars": {
+              "reverse_nested": {},
+              "aggs": {
+                "statsAgg": {
+                  "extended_stats": {
+                    "field": "awardValueNumeric"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
